@@ -4,7 +4,8 @@ This application crawls websites for URLs and stores the domains in a nested key
 
 The database consists of 2 root buckets, uncrawled and all. See below for an example.
 
-```UNCRAWLED
+```
+UNCRAWLED
     google.com
     facebook.com
     docs.google.com
@@ -16,7 +17,8 @@ ALL
         facebook
     co
         uk
-            amazon```
+            amazon
+```
 
 ![image](https://raw.githubusercontent.com/leona/domain-crawler/master/screenshot.png)
 
