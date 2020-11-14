@@ -24,16 +24,21 @@ ALL
 
 ## Usage
 Download the binary [here](./bin)
+
 Start crawling using default options
+
 ```./crawler```
 
 Use flag -h to show all arguments
+
 ```./crawler -h```
 
 Example
+
 ```./crawler -seed bbc.com -threads 200```
 
 While the crawler is stopped you can get stats or make a query using
+
 ```./crawler -search google.com```
 ```./crawler -stat```
 
