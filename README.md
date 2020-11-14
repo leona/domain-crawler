@@ -23,7 +23,7 @@ ALL
 ![image](https://github.com/leona/domain-crawler/blob/master/screenshot.png?raw=true)
 
 ## Usage
-Download the binary [here](./bin)
+Download the binary [here](https://github.com/leona/domain-crawler/releases/)
 
 Start crawling using default options
 
@@ -35,7 +35,7 @@ Use flag -h to show all arguments
 
 Example
 
-```./crawler -seed bbc.com -threads 200```
+```./crawler -seed bbc.com -threads 128```
 
 While the crawler is stopped you can get stats or make a query using
 
