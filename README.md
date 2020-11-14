@@ -20,7 +20,7 @@ ALL
             amazon
 ```
 
-![image](https://raw.githubusercontent.com/leona/domain-crawler/master/screenshot.png)
+![image](https://github.com/leona/domain-crawler/blob/master/screenshot.png?raw=true)
 
 ## Usage
 Download the binary [here](./bin)
