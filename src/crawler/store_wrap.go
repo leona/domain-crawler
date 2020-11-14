@@ -40,6 +40,31 @@ func (self StoreWrap) searchLimit(host string, limit int) ([]string) {
 	return results
 }
 
+// Hacky method for dealing with spam domains
+func (self StoreWrap) shouldCrawl(components []string) bool {
+	if isTopLevel(components[0]) {
+		searchQuery := strings.Join(reverse(components[0:2]), ".")
+		searchResults := self.searchLimit(searchQuery, *InputOptions.Limit)
+
+		if len(searchResults) >= *InputOptions.Limit {
+			Info(3, "Skipping top level:", searchQuery, "Has:", len(searchResults), "previous results")
+			return false
+		}
+	}
+
+	if !isTopLevel(components[0]) && len(components) >= 4 {
+		searchQuery := strings.Join(reverse(components[0:3]), ".")
+		searchResults := self.searchLimit(searchQuery, *InputOptions.Limit)
+
+		if len(searchResults) >= *InputOptions.Limit {
+			Info(3, "Skipping 3rd level:", searchQuery, "Has:", len(searchResults), "previous results")
+			return false
+		}
+	}
+
+	return true
+}
+
 func (self StoreWrap) SaveHosts(hosts []string) int {
 	counter := 0
 
@@ -51,24 +76,8 @@ func (self StoreWrap) SaveHosts(hosts []string) int {
 			counter += 1
 			self.createNestedBucket("all", components)
 
-			if isTopLevel(components[0]) {
-				searchQuery := strings.Join(reverse(components[0:2]), ".")
-				searchResults := self.searchLimit(searchQuery, *InputOptions.Limit)
-
-				if len(searchResults) >= *InputOptions.Limit {
-					Info(3, "Skipping top level:", searchQuery, "Has:", len(searchResults), "previous results")
-					continue
-				}
-			}
-
-			if !isTopLevel(components[0]) && len(components) >= 4 {
-				searchQuery := strings.Join(reverse(components[0:3]), ".")
-				searchResults := self.searchLimit(searchQuery, *InputOptions.Limit)
-
-				if len(searchResults) >= *InputOptions.Limit {
-					Info(3, "Skipping 3rd level:", searchQuery, "Has:", len(searchResults), "previous results")
-					continue
-				}
+			if !self.shouldCrawl(components) {
+				continue
 			}
 
 			self.put("uncrawled", host)
