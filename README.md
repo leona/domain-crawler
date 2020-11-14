@@ -40,6 +40,7 @@ Example
 While the crawler is stopped you can get stats or make a query using
 
 ```./crawler -search google.com```
+or
 ```./crawler -stat```
 
 ## Build from source
