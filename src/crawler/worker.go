@@ -1,39 +1,48 @@
 package crawler
 
 import (
-	_ "fmt"
+	"github.com/leona/domain-crawler/src/crawler/utilities"
+	"github.com/leona/domain-crawler/src/crawler/models"
 	"time"
 	"net/http"
 	"io/ioutil"
 	"regexp"
-	"net/url"
-	"log"
-	"path/filepath"
-	"strings"
+	"net"
 )
 
 type Worker struct {
 	urlPattern *regexp.Regexp
-	Share *WorkerShare
+	Share *models.WorkerShare
 }
 
 var client *http.Client
 var transport *http.Transport
 
 func init() {
+	utilities.Info(0, "Creating HTTP Client")
+	
 	transport = &http.Transport{
-		MaxIdleConns:          100000,
+		MaxIdleConns:          *utilities.InputOptions.Threads,
+		MaxIdleConnsPerHost: *utilities.InputOptions.Threads,
+		MaxConnsPerHost: 0,
 		IdleConnTimeout:       3 * time.Second,
 		TLSHandshakeTimeout:   3 * time.Second,
 		ExpectContinueTimeout: 3 * time.Second,
+		ResponseHeaderTimeout: 3 * time.Second,
 		DisableCompression: false,
+		ForceAttemptHTTP2:     false,
+		DialContext: (&net.Dialer{
+			Timeout:   5 * time.Second,
+			KeepAlive: 5 * time.Second,
+			DualStack: true,
+		}).DialContext,
 	}
 	
 	client = &http.Client{Transport: transport}	
 }
 
 func (self * Worker) Init() {
-	Info(3, "Starting working for:", self.Share.Host)
+	utilities.Info(3, "Starting working for:", self.Share.Host)
 	urlPattern, _ := regexp.Compile(URL_REGEX)
 	self.urlPattern = urlPattern
 }
@@ -52,74 +61,60 @@ func (self * Worker) getBody(url string) ([]byte, error) {
 	resp, err := client.Do(req)
 
 	if err != nil {
-		Info(3, "Errror making request to:", url)
+		utilities.Info(2, "Errror making request to:", url, err)
 		return []byte{}, err
 	}
-
+	
 	defer resp.Body.Close()
 	return ioutil.ReadAll(resp.Body)
 }
 
 func (self *Worker) addUrl(urlString string) {
-	urlString = strings.Replace(urlString, "https://", "http://", -1)
-	url, err := url.Parse(urlString)
+	xurl := models.MakeXurl(urlString)
 
-	if err != nil {
-		log.Print(err)
+	if xurl.Url == nil {
 		return
 	}
 
-	requestUri := url.RequestURI()
-
-	if requestUri == "/" {
-		requestUri = ""
-	}
-
-	urlString = "http://" + url.Host + requestUri
-	url, _ = url.Parse(urlString)
-
-	if url.Host != self.Share.Host {
-		self.Share.appendExternal(urlString, url)
+	if xurl.Url.Host != self.Share.Host {
+		self.Share.AppendExternal(xurl)
 		return
 	}
 
-	self.Share.append(urlString, url)
+	self.Share.Append(xurl)
 }
 
 func (self *Worker) Start() {
 	for {
 		if self.Share.MaxDepth > 0 && self.Share.Depth > self.Share.MaxDepth {
-			Info(3, "Reached max depth for worker:", self.Share.Host)
+			utilities.Info(3, "Reached max depth for worker:", self.Share.Host)
 			return
 		}
 
-		url, err := self.Share.popItem()
+		xurl, err := self.Share.PopItem()
 
 		if err != nil {
-			Info(3, "No more work for:", self.Share.Host)
+			utilities.Info(3, "No more work for:", self.Share.Host, err)
 			return
 		}
 
-		path := url.EscapedPath()
-		extension := filepath.Ext(path)
-
-		if isInvalidExtension(extension) {
-			Info(3, "Invalid extension for url:", url.String())
+		if xurl.IsAsset() {
+			utilities.Info(3, "Invalid extension for url:", xurl.Raw)
 			continue
 		}
 
-		Info(3, "Crawling:", url.String(), "For worker:", self.Share.Host)
-		body, err := self.getBody(url.String())
+		utilities.Info(3, "Crawling:", xurl.Raw, "For worker:", self.Share.Host)
+		body, err := self.getBody(xurl.Raw)
 		
 		if err != nil {
-			Info(3, "Errror getting response body for:", url.String())
+			utilities.Info(3, "Errror getting response body for:", xurl.Raw)
 			continue
 		}
 
 		urls := self.getBodyUrls(body) 
 
 		if len(urls) == 0 {
-			Info(3, "No urls for:", url.String())
+			utilities.Info(3, "No urls for:", xurl.Raw)
 		}
 		
 		for _, url := range urls {

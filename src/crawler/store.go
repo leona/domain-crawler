@@ -1,10 +1,12 @@
 package crawler
 
 import (
+	"github.com/leona/domain-crawler/src/crawler/utilities"
 	"github.com/boltdb/bolt"
 	"log"
 	"fmt"
 	"strings"
+	"errors"
 )
 
 type StoreType struct {
@@ -13,7 +15,7 @@ type StoreType struct {
 
 func (self *StoreType) init() {
 	var err error
-	self.db, err = bolt.Open(*InputOptions.Db + ".db", 0600, nil)
+	self.db, err = bolt.Open(*utilities.InputOptions.Db + ".db", 0600, nil)
 
 	if err != nil {
 		log.Fatal(err)
@@ -45,6 +47,7 @@ func (self *StoreType) put(root StoreKey, value string) (error) {
 }
 
 func (self *StoreType) Pop(root StoreKey, count int) []string {
+	utilities.Info(3, "Popping:", root)
 	tx, err := self.db.Begin(true)
 
 	if err != nil {
@@ -54,6 +57,11 @@ func (self *StoreType) Pop(root StoreKey, count int) []string {
 	defer tx.Rollback()
 
 	bucket := tx.Bucket([]byte(root))
+
+	if bucket == nil {
+		utilities.Info(3, "Failed to pop. Could not find root bucket.")
+	}
+
 	cursor := bucket.Cursor()
 	output := []string{}
 
@@ -75,6 +83,7 @@ func (self *StoreType) Pop(root StoreKey, count int) []string {
 }
 
 func (self *StoreType) getNestedBuckets(root StoreKey, path []string, limit int) ([]string) {
+	utilities.Info(3, "getNestedBuckets in root:", root, "- path:", path)
 	output := []string{}
 
 	self.db.View(func(tx *bolt.Tx) error {
@@ -104,7 +113,7 @@ func (self *StoreType) getNestedBuckets(root StoreKey, path []string, limit int)
 				}
 
 				component := append(base, string(key))
-				output = append(output, strings.Join(reverse(component), "."))
+				output = append(output, strings.Join(utilities.Reverse(component), "."))
 				
 				_bucket := _bucket.Bucket(key)
 
@@ -121,12 +130,13 @@ func (self *StoreType) getNestedBuckets(root StoreKey, path []string, limit int)
 	return output
 }
 
-func (self *StoreType) createNestedBucket(root StoreKey, path []string) {
+func (self *StoreType) createNestedBucket(root StoreKey, path []string) error {
+	utilities.Info(3, "createNestedBucket in root:", root, "- path:", path)
 	tx, err := self.db.Begin(true)
 
 	if err != nil {
 		fmt.Println("Error starting db for createNestedBucket", err)
-		return
+		return errors.New("Error starting db transaction")
 	}
 	defer tx.Rollback()
 
@@ -136,22 +146,27 @@ func (self *StoreType) createNestedBucket(root StoreKey, path []string) {
 	for _, item := range path {
 		if len(item) == 0 {
 			fmt.Println("Error creating nested bucket. Path empty.")
-			return
+			return errors.New("Error created nested bucket. Path emtpy.")
 		}
 		
 		bucket, err = bucket.CreateBucketIfNotExists([]byte(item))
 
 		if err != nil {
 			fmt.Println("Error in createNestedBucket", err)
+			return err
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
 		fmt.Println("Transaction error", err)
+		return err
 	}
+
+	return nil
 }
 
 func (self *StoreType) getNestedBucket(root StoreKey, path []string) (*bolt.Bucket) {
+	utilities.Info(3, "getNestedBucket in root:", root, "- path:", path)
 	tx, err := self.db.Begin(true)
 
 	if err != nil {

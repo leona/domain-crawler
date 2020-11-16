@@ -2,18 +2,19 @@ package main
 
 import (
 	"fmt"
-	"net/url"
 	"github.com/mbndr/figlet4go"
 	"flag"
 	"os"
 	"github.com/leona/domain-crawler/src/crawler"
+	"github.com/leona/domain-crawler/src/crawler/models"
+	"github.com/leona/domain-crawler/src/crawler/utilities"
 )
 
-func workerContainer(host string, quit chan *crawler.WorkerShare) {
-	workerShare := crawler.WorkerShare{
-		Paths: make(map[string]*url.URL),
+func workerContainer(host string, quit chan *models.WorkerShare) {
+	workerShare := models.WorkerShare{
+		Paths: make(map[string]*models.Xurl),
 		Host: host,
-		MaxDepth: *crawler.InputOptions.Depth,
+		MaxDepth: *utilities.InputOptions.Depth,
 	}
 
 	workerShare.Init()
@@ -29,9 +30,9 @@ func workerContainer(host string, quit chan *crawler.WorkerShare) {
 
 func initWorkers() {
 	fmt.Println("Starting workers")
-	quit := make(chan *crawler.WorkerShare)
+	quit := make(chan *models.WorkerShare)
 
-	for id := 0; id < *crawler.InputOptions.Threads; id++ {
+	for id := 0; id < *utilities.InputOptions.Threads; id++ {
         go func() {
 			quit <- nil
 		}()
@@ -44,7 +45,7 @@ func initWorkers() {
 			hosts := share.Paths.UniqueHosts()
 			count := crawler.Store.SaveHosts(hosts)
 
-			crawler.Info(2, "Saving share for:", share.Host, len(hosts), "unique hosts.", count, "stored")
+			utilities.Info(2, "Saving share for:", share.Host, len(hosts), "unique hosts.", count, "stored")
 		}
 
 		host := crawler.Store.Pop(crawler.StoreKeyUncrawled, 1)
@@ -59,7 +60,12 @@ func initWorkers() {
 }
 
 func main() {
-	if *crawler.InputOptions.Help == true {
+	if *utilities.InputOptions.Test == true {
+		fmt.Println("Running tests")
+		os.Exit(0)
+	}
+
+	if *utilities.InputOptions.Help == true {
 		ascii := figlet4go.NewAsciiRender()
 
 		options := figlet4go.NewRenderOptions()
@@ -75,25 +81,27 @@ func main() {
 		os.Exit(0)
 	}
 
-	if len(*crawler.InputOptions.Seed) > 0 {
-		crawler.Info(0, "Seed provided:", crawler.InputOptions.Seed)
-		crawler.Store.SaveHosts([]string{*crawler.InputOptions.Seed})
+	if len(*utilities.InputOptions.Seed) > 0 {
+		utilities.Info(0, "Seed provided:", utilities.InputOptions.Seed)
+		url := models.MakeXurl("http://" + *utilities.InputOptions.Seed)
+		crawler.Store.SaveHosts([]*models.Xurl{url})
 	}
 
-	if len(*crawler.InputOptions.Search) > 0 {
-		crawler.Info(0, "Searching DB")
+	if len(*utilities.InputOptions.Search) > 0 {
+		utilities.Info(0, "Searching DB")
+		url := models.MakeXurl("http://" + *utilities.InputOptions.Search)
 
-		results := crawler.Store.Search(*crawler.InputOptions.Search)
+		results := crawler.Store.Search(url.FullComponents)
 
 		for _, item := range results {
 			fmt.Println(item)
 		}
 		
-		crawler.Info(0, len(results), "results found")
+		utilities.Info(0, len(results), "results found")
 		os.Exit(0)
 	}
 
-	if *crawler.InputOptions.Stat == true {
+	if *utilities.InputOptions.Stat == true {
 		allCount, uncrawledCount := crawler.Store.Stat()
 		fmt.Println(allCount, "total -", uncrawledCount, "uncrawled.")
 		os.Exit(0)

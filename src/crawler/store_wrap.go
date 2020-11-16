@@ -1,8 +1,9 @@
 package crawler
 
 import (
-	"strings"
 	_"fmt"
+	"github.com/leona/domain-crawler/src/crawler/models"
+	"github.com/leona/domain-crawler/src/crawler/utilities"
 )
 
 type StoreWrap struct {
@@ -16,14 +17,7 @@ func init() {
 	Store.init()
 }
 
-func (self StoreWrap) splitHost(host string) ([]string) {
-	components := strings.Split(host, ".") 
-	reversed := reverse(components)
-	return reversed
-}
-
-func (self StoreWrap) Search(host string) ([]string) {
-	components := self.splitHost(host)
+func (self StoreWrap) Search(components []string) ([]string) {
 	results := self.getNestedBuckets(StoreKeyAll, components, 0)
 	return results
 }
@@ -34,53 +28,45 @@ func (self StoreWrap) Stat() (int, int) {
 	return allCount, uncrawledCount
 }
 
-func (self StoreWrap) searchLimit(host string, limit int) ([]string) {
-	components := self.splitHost(host)
+func (self StoreWrap) searchLimit(components []string, limit int) ([]string) {
 	results := self.getNestedBuckets(StoreKeyAll, components, limit)
 	return results
 }
 
-// Hacky method for dealing with spam domains
-func (self StoreWrap) shouldCrawl(components []string) bool {
-	if isTopLevel(components[0]) {
-		searchQuery := strings.Join(reverse(components[0:2]), ".")
-		searchResults := self.searchLimit(searchQuery, *InputOptions.Limit)
+func (self StoreWrap) ShouldCrawl(components []string) bool {
+	searchResults := self.searchLimit(components, *utilities.InputOptions.Limit)
 
-		if len(searchResults) >= *InputOptions.Limit {
-			Info(3, "Skipping top level:", searchQuery, "Has:", len(searchResults), "previous results")
-			return false
-		}
-	}
-
-	if !isTopLevel(components[0]) && len(components) >= 4 {
-		searchQuery := strings.Join(reverse(components[0:3]), ".")
-		searchResults := self.searchLimit(searchQuery, *InputOptions.Limit)
-
-		if len(searchResults) >= *InputOptions.Limit {
-			Info(3, "Skipping 3rd level:", searchQuery, "Has:", len(searchResults), "previous results")
-			return false
-		}
+	if len(searchResults) >= *utilities.InputOptions.Limit {
+		utilities.Info(3, "Skipping:", components, "Has:", len(searchResults), "previous results")
+		return false
+	} else {
+		utilities.Info(3, "Not skipping:", components, "Has:", len(searchResults), "limit:", *utilities.InputOptions.Limit)
 	}
 
 	return true
 }
 
-func (self StoreWrap) SaveHosts(hosts []string) int {
+func (self StoreWrap) SaveHosts(hosts []*models.Xurl) int {
 	counter := 0
 
 	for _, host := range hosts {
-		components := self.splitHost(host)
-		current := self.getNestedBucket(StoreKeyAll, components)
+		current := self.getNestedBucket(StoreKeyAll, host.FullComponents)
 
 		if current == nil {
-			counter += 1
-			self.createNestedBucket("all", components)
-
-			if !self.shouldCrawl(components) {
+			if err := self.createNestedBucket(StoreKeyAll, host.FullComponents); err != nil {
 				continue
 			}
 
-			self.put("uncrawled", host)
+			counter += 1
+
+			if self.ShouldCrawl(host.RootComponents) == false {
+				continue
+			}
+
+			utilities.Info(3, "Adding to crawl list:", host.Url.Host)
+			self.put(StoreKeyUncrawled, host.Url.Host)
+		} else {
+			utilities.Info(3, host.Url.Host, "already exists")
 		}
 	}
 
